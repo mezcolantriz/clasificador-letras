@@ -1,0 +1,43 @@
+import pandas as pd
+
+def clean_duplicates(file_path, output_path):
+    """
+    Limpia duplicados en un archivo CSV basándose en SPOTIFY_URL.
+    Se queda con una fila por URL, priorizando según criterios específicos.
+    :param file_path: Ruta del archivo CSV original.
+    :param output_path: Ruta para guardar el archivo limpio.
+    """
+    try:
+        # Leer archivo original
+        df = pd.read_csv(file_path)
+
+        # Identificar duplicados por SPOTIFY_URL
+        duplicated = df[df.duplicated(subset=['SPOTIFY_URL'], keep=False)]
+        print(f"Número total de duplicados basados en URL: {len(duplicated)}")
+
+        # Priorizar según criterios (puedes personalizar esto)
+        def prioritize_rows(group):
+            # Ejemplo: Ordenar por popularidad (descendente) y quedarse con la primera fila
+            return group.sort_values(by='POPULARITY', ascending=False).iloc[0]
+
+        # Agrupar por SPOTIFY_URL y aplicar priorización
+        deduplicated = duplicated.groupby('SPOTIFY_URL').apply(prioritize_rows).reset_index(drop=True)
+
+        # Combinar filas únicas con las priorizadas
+        unique_rows = df[~df['SPOTIFY_URL'].duplicated(keep=False)]
+        cleaned_df = pd.concat([unique_rows, deduplicated], ignore_index=True)
+
+        # Guardar resultado
+        cleaned_df.to_csv(output_path, index=False)
+        print(f"Archivo limpio guardado en: {output_path}")
+        print(f"Filas totales después de limpiar: {len(cleaned_df)}")
+
+    except Exception as e:
+        print(f"Error procesando duplicados: {e}")
+
+# Configuración de archivos
+input_file = r"C:\Users\solan\Downloads\clasificador-letras\data\combined_with_language.csv"
+output_file = r"C:\Users\solan\Downloads\clasificador-letras\data\cleaned_combined_with_language.csv"
+
+# Ejecutar limpieza
+clean_duplicates(input_file, output_file)

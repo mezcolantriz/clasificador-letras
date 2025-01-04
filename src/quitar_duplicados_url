@@ -1,0 +1,88 @@
+import pandas as pd
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
+from dotenv import load_dotenv
+import os
+import time
+
+# Cargar las variables de entorno desde el archivo .env
+load_dotenv()
+
+SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
+SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
+
+spotify = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
+    client_id=SPOTIFY_CLIENT_ID,
+    client_secret=SPOTIFY_CLIENT_SECRET
+))
+
+def search_spotify_url(artist, song):
+    """
+    Busca la URL de Spotify para un artista y canción específicos.
+    :param artist: Nombre del artista.
+    :param song: Nombre de la canción.
+    :return: URL de Spotify si se encuentra, None si no.
+    """
+    query = f"{artist} {song}"
+    try:
+        results = spotify.search(q=query, type='track', limit=1)
+        tracks = results.get('tracks', {}).get('items', [])
+        if tracks:
+            return tracks[0]['external_urls']['spotify']
+    except Exception as e:
+        print(f"Error buscando URL para {artist} - {song}: {e}")
+    return None
+
+def update_duplicated_urls(file_path):
+    """
+    Actualiza las URLs duplicadas en el archivo CSV original.
+    :param file_path: Ruta del archivo CSV.
+    """
+    try:
+        # Cargar el archivo
+        df = pd.read_csv(file_path)
+        
+        # Identificar duplicados en la columna SPOTIFY_URL
+        duplicated_rows = df[df.duplicated(subset=['SPOTIFY_URL'], keep=False)]
+        print(f"Número de duplicados encontrados: {len(duplicated_rows)}")
+        print(f"Duplicados identificados:\n{duplicated_rows}")
+
+        # Procesar duplicados y actualizar URLs
+        for idx, row in duplicated_rows.iterrows():
+            artist = row['ARTIST_NAME']
+            song = row['SONG_NAME']
+            new_url = search_spotify_url(artist, song)
+            
+            if new_url:
+                df.at[idx, 'SPOTIFY_URL'] = new_url
+                print(f"Actualizada URL para {artist} - {song}: {new_url}")
+            else:
+                print(f"No se pudo actualizar URL para {artist} - {song}")
+
+            # Añadir pausa para respetar límites de la API
+            time.sleep(0.2)
+
+            # Guardar cada 500 filas procesadas
+            if idx % 500 == 0:
+                print(f"Guardando progreso después de {idx} filas procesadas...")
+                df.to_csv(file_path, index=False)
+
+        # Guardar el DataFrame actualizado en el mismo archivo
+        df.to_csv(file_path, index=False)
+        print(f"Archivo actualizado guardado en {file_path}")
+
+        # Verificar si persisten duplicados
+        remaining_duplicates = df[df.duplicated(subset=['SPOTIFY_URL'], keep=False)]
+        print(f"Número de duplicados restantes: {len(remaining_duplicates)}")
+
+    except FileNotFoundError:
+        print(f"No se encontró el archivo {file_path}. Verifica la ruta.")
+    except Exception as e:
+        print(f"Se produjo un error: {e}")
+
+if __name__ == "__main__":
+    # Ruta del archivo combinado
+    file_path = r"C:\Users\solan\Downloads\clasificador-letras\data\combined_with_language.csv"
+    
+    # Ejecutar la actualización de URLs duplicadas
+    update_duplicated_urls(file_path)
